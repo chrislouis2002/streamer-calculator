@@ -230,7 +230,7 @@ function App() {
       (settings.addAllowanceToBalance ? allowance : 0) -
       actualDeduction
 
-    let status = 'DANGER ZONE 🚨'
+    let status = 'BELOW THRESHOLD 🚨'
 
     if (earningsAmount >= settings.target) {
       status = 'TARGET ACHIEVED ✅'
@@ -343,6 +343,7 @@ function App() {
             <h2>{result.streamerName}</h2>
             <p>Date: {result.date}</p>
             <p>Today's Earnings: {formatNaira(result.earnings)}</p>
+            <p className="status">STATUS: {result.status}</p>
             <p>Target: {formatNaira(settings.target)}</p>
             <p>Daily Bonus: {formatNaira(result.bonus)}</p>
             <p>Daily Allowance: {formatNaira(result.allowance)}</p>
@@ -363,7 +364,7 @@ function App() {
             <p className="new-balance">
               New Balance: {formatNaira(result.newBalance)}
             </p>
-            <p className="status">STATUS: {result.status}</p>
+            
           </section>
         )}
       </>
@@ -699,7 +700,7 @@ function App() {
               <span className="admin-section-text">
                 <strong>Deduction Rules</strong>
                 <small>
-                  Special percentage and danger zones
+                  Special percentage and threshold rules
                 </small>
               </span>
 
