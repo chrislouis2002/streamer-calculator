@@ -1,0 +1,416 @@
+.app {
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.header p {
+  margin: 0;
+  color: #666;
+  font-size: 15px;
+}
+
+.calculator-card {
+  background: #ffffff;
+  padding: 22px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  height: 52px;
+  padding: 0 14px;
+  border: 1px solid #d7d7d7;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 16px;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #222;
+}
+
+.money-input {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  border: 1px solid #d7d7d7;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.money-input span {
+  padding-left: 14px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.money-input input {
+  border: none;
+  height: 100%;
+  flex: 1;
+  outline: none;
+  padding: 0 12px;
+  font-size: 16px;
+}
+
+.calculate-button {
+  width: 100%;
+  height: 56px;
+  border: none;
+  border-radius: 10px;
+  background: #111111;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.calculate-button:active {
+  transform: scale(0.99);
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 18px 14px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .calculator-card {
+    padding: 18px;
+  }
+}
+
+.app {
+  padding-bottom: 90px;
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: #ffffff;
+  border-top: 1px solid #e5e5e5;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  z-index: 10;
+}
+
+.bottom-nav button {
+  flex: 1;
+  min-height: 64px;
+  border: none;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bottom-nav button.active {
+  font-weight: 800;
+  background: #f3f3f3;
+}
+
+.balance-list {
+  display: grid;
+  gap: 14px;
+}
+
+.balance-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.balance-card h2 {
+  margin: 0 0 5px;
+  font-size: 17px;
+}
+
+.balance-card p {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.balance-card strong {
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.records-list {
+  display: grid;
+  gap: 14px;
+}
+
+.record-card {
+  padding: 18px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.record-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.record-top h2 {
+  margin: 0 0 5px;
+  font-size: 17px;
+}
+
+.record-top p {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.record-top strong {
+  white-space: nowrap;
+  font-size: 17px;
+}
+
+.record-details {
+  display: grid;
+  gap: 8px;
+}
+
+.record-details p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.summary-list {
+  display: grid;
+  gap: 14px;
+}
+
+.summary-card,
+.totals-card {
+  padding: 18px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.summary-card h2,
+.totals-card h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  font-size: 14px;
+}
+
+.summary-row span {
+  color: #666;
+}
+
+.summary-row strong {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.final-row {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid #eeeeee;
+  font-size: 15px;
+}
+
+.summary-status {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #eeeeee;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.totals-card {
+  margin-top: 18px;
+}
+
+.whatsapp-button {
+  width: 100%;
+  min-height: 56px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 10px;
+  background: #111111;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.whatsapp-button:active {
+  transform: scale(0.99);
+}
+
+.report-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.report-actions .whatsapp-button {
+  margin-top: 0;
+}
+
+.print-button {
+  width: 100%;
+  min-height: 56px;
+  border: 1px solid #111111;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.print-button:active {
+  transform: scale(0.99);
+}
+
+@media print {
+  .bottom-nav,
+  .report-actions {
+    display: none !important;
+  }
+
+  .app {
+    padding: 0;
+  }
+
+  .container {
+    max-width: none;
+  }
+
+  .summary-card,
+  .totals-card {
+    box-shadow: none;
+    border: 1px solid #dddddd;
+    break-inside: avoid;
+  }
+}
+
+.settings-card {
+  background: #ffffff;
+  padding: 22px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+}
+
+.settings-card h2 {
+  margin: 0 0 20px;
+  font-size: 19px;
+}
+
+.settings-section-title {
+  margin-top: 30px !important;
+}
+
+.percentage-input {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  border: 1px solid #d7d7d7;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.percentage-input input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0 14px;
+  outline: none;
+  font-size: 16px;
+}
+
+.percentage-input span {
+  padding-right: 16px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.toggle-row select {
+  min-width: 90px;
+  height: 48px;
+  padding: 0 12px;
+  border: 1px solid #d7d7d7;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-help {
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f5f5f5;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
