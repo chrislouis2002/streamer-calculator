@@ -1,4 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+} from 'firebase/firestore'
+import { db } from './firebase'
 import './App.css'
 
 const startingStreamers = [
@@ -46,6 +54,9 @@ function getDangerDeduction(earnings, dangerZones) {
 
 function App() {
   const [activePage, setActivePage] = useState('calculator')
+  const [adminSection, setAdminSection] = useState('')
+  const [expandedStreamerId, setExpandedStreamerId] = useState(null)
+  const [selectedAdminStreamerId, setSelectedAdminStreamerId] = useState('')
   const [streamers, setStreamers] = useState(startingStreamers)
   const [settings, setSettings] = useState(defaultSettings)
   const [records, setRecords] = useState([])
@@ -53,6 +64,109 @@ function App() {
   const [streamerId, setStreamerId] = useState('')
   const [earnings, setEarnings] = useState('')
   const [result, setResult] = useState(null)
+  const [firebaseReady, setFirebaseReady] = useState(false)
+  const [firebaseLoading, setFirebaseLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadFirebaseData() {
+      try {
+        const settingsSnapshot = await getDoc(doc(db, 'settings', 'app'))
+
+        if (settingsSnapshot.exists()) {
+          setSettings(settingsSnapshot.data())
+        } else {
+          await setDoc(
+            doc(db, 'settings', 'app'),
+            defaultSettings
+          )
+        }
+
+        const streamersSnapshot = await getDocs(
+          collection(db, 'streamers')
+        )
+
+        if (!streamersSnapshot.empty) {
+          setStreamers(
+            streamersSnapshot.docs.map((snapshot) => ({
+              id: snapshot.id,
+              ...snapshot.data(),
+            }))
+          )
+        } else {
+          await Promise.all(
+            startingStreamers.map((streamer) =>
+              setDoc(
+                doc(db, 'streamers', streamer.id),
+                streamer
+              )
+            )
+          )
+        }
+
+        const recordsSnapshot = await getDocs(
+          collection(db, 'records')
+        )
+
+        if (!recordsSnapshot.empty) {
+          setRecords(
+            recordsSnapshot.docs.map((snapshot) => ({
+              id: snapshot.id,
+              ...snapshot.data(),
+            }))
+          )
+        }
+
+        setFirebaseReady(true)
+      } catch (error) {
+        console.error('Firebase loading error:', error)
+        alert(
+          'Could not connect to Firebase. Check your Firestore setup and rules.'
+        )
+      } finally {
+        setFirebaseLoading(false)
+      }
+    }
+
+    loadFirebaseData()
+  }, [])
+
+  useEffect(() => {
+    if (!firebaseReady) return
+
+    setDoc(doc(db, 'settings', 'app'), settings).catch((error) => {
+      console.error('Firebase settings save error:', error)
+    })
+  }, [settings, firebaseReady])
+
+  useEffect(() => {
+    if (!firebaseReady) return
+
+    streamers.forEach((streamer) => {
+      const { id, ...streamerData } = streamer
+
+      setDoc(
+        doc(db, 'streamers', id),
+        streamerData
+      ).catch((error) => {
+        console.error('Firebase streamer save error:', error)
+      })
+    })
+  }, [streamers, firebaseReady])
+
+  useEffect(() => {
+    if (!firebaseReady) return
+
+    records.forEach((record) => {
+      const { id, ...recordData } = record
+
+      setDoc(
+        doc(db, 'records', id),
+        recordData
+      ).catch((error) => {
+        console.error('Firebase record save error:', error)
+      })
+    })
+  }, [records, firebaseReady])
 
   function handleCalculate() {
     const streamer = streamers.find((person) => person.id === streamerId)
@@ -119,9 +233,9 @@ function App() {
     let status = 'DANGER ZONE 🚨'
 
     if (earningsAmount >= settings.target) {
-      status = 'settings.target ACHIEVED ✅'
+      status = 'TARGET ACHIEVED ✅'
     } else if (earningsAmount >= 26000) {
-      status = 'BELOW settings.target ⚠️'
+      status = 'BELOW TARGET ⚠️'
     }
 
     const newRecord = {
@@ -298,6 +412,668 @@ function App() {
     )
   }
 
+
+  function updateSetting(key, value) {
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      [key]: value,
+    }))
+  }
+
+  function updateStreamer(id, key, value) {
+    setStreamers((currentStreamers) =>
+      currentStreamers.map((streamer) =>
+        streamer.id === id
+          ? { ...streamer, [key]: value }
+          : streamer
+      )
+    )
+  }
+
+  function updateDangerZone(id, key, value) {
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      dangerZones: currentSettings.dangerZones.map((zone) =>
+        zone.id === id
+          ? { ...zone, [key]: Number(value) }
+          : zone
+      ),
+    }))
+  }
+
+  function addDangerZone() {
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      dangerZones: [
+        ...currentSettings.dangerZones,
+        {
+          id: `zone-${Date.now()}`,
+          min: 0,
+          max: 0,
+          deduction: 0,
+        },
+      ],
+    }))
+  }
+
+  function removeDangerZone(id) {
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      dangerZones: currentSettings.dangerZones.filter(
+        (zone) => zone.id !== id
+      ),
+    }))
+  }
+
+  function addStreamer() {
+    const newName = window.prompt(
+      'Enter the new streamer name:'
+    )
+
+    if (!newName || !newName.trim()) return
+
+    setStreamers((currentStreamers) => [
+      ...currentStreamers,
+      {
+        id: `streamer-${Date.now()}`,
+        name: newName.trim(),
+        balance: 0,
+        specialDeduction: false,
+        active: true,
+      },
+    ])
+  }
+
+  function toggleAdminSection(section) {
+    setAdminSection((currentSection) =>
+      currentSection === section ? '' : section
+    )
+  }
+
+  function renderAdminSettings() {
+    return (
+      <>
+        <header className="header admin-header">
+          <div className="admin-title-row">
+            <div>
+              <p className="admin-eyebrow">CONTROL PANEL</p>
+              <h1>Admin Settings</h1>
+              <p>
+                Manage your rules, deductions and streamers.
+              </p>
+            </div>
+
+            <div className="admin-header-badge">
+              <span>{streamers.filter(
+                (streamer) => streamer.active !== false
+              ).length}</span>
+              <small>Active</small>
+            </div>
+          </div>
+        </header>
+
+        <section className="admin-dashboard">
+
+          <div className="admin-overview">
+            <article className="admin-stat-card">
+              <span className="admin-stat-icon">🎯</span>
+              <div>
+                <small>Daily Target</small>
+                <strong>{formatNaira(settings.target)}</strong>
+              </div>
+            </article>
+
+            <article className="admin-stat-card">
+              <span className="admin-stat-icon">⚡</span>
+              <div>
+                <small>Bonus</small>
+                <strong>{settings.bonusPercentage}%</strong>
+              </div>
+            </article>
+
+            <article className="admin-stat-card">
+              <span className="admin-stat-icon">👥</span>
+              <div>
+                <small>Streamers</small>
+                <strong>{streamers.length}</strong>
+              </div>
+            </article>
+          </div>
+
+          <section className="admin-section-card">
+            <button
+              className="admin-section-trigger"
+              type="button"
+              onClick={() => toggleAdminSection('rules')}
+              aria-expanded={adminSection === 'rules'}
+            >
+              <span className="admin-section-icon">🎯</span>
+
+              <span className="admin-section-text">
+                <strong>Calculation Rules</strong>
+                <small>
+                  Target, bonus and allowance settings
+                </small>
+              </span>
+
+              <span className="admin-section-arrow">
+                {adminSection === 'rules' ? '⌃' : '⌄'}
+              </span>
+            </button>
+
+            {adminSection === 'rules' && (
+              <div className="admin-section-body">
+                <div className="admin-form-grid">
+                  <div className="form-group admin-full-width">
+                    <label htmlFor="adminTarget">
+                      Daily Target
+                    </label>
+
+                    <div className="money-input">
+                      <span>₦</span>
+                      <input
+                        id="adminTarget"
+                        type="number"
+                        min="0"
+                        value={settings.target}
+                        onChange={(event) =>
+                          updateSetting(
+                            'target',
+                            Number(event.target.value)
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="adminBonus">
+                      Bonus Percentage
+                    </label>
+
+                    <div className="percentage-input">
+                      <input
+                        id="adminBonus"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={settings.bonusPercentage}
+                        onChange={(event) =>
+                          updateSetting(
+                            'bonusPercentage',
+                            Number(event.target.value)
+                          )
+                        }
+                      />
+                      <span>%</span>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="adminAllowance">
+                      Allowance Percentage
+                    </label>
+
+                    <div className="percentage-input">
+                      <input
+                        id="adminAllowance"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={settings.allowancePercentage}
+                        onChange={(event) =>
+                          updateSetting(
+                            'allowancePercentage',
+                            Number(event.target.value)
+                          )
+                        }
+                      />
+                      <span>%</span>
+                    </div>
+                  </div>
+
+                  <div className="form-group admin-full-width">
+                    <label htmlFor="adminTargetAllowance">
+                      Allowance When Target Is Reached
+                    </label>
+
+                    <div className="money-input">
+                      <span>₦</span>
+                      <input
+                        id="adminTargetAllowance"
+                        type="number"
+                        min="0"
+                        value={settings.targetAllowance}
+                        onChange={(event) =>
+                          updateSetting(
+                            'targetAllowance',
+                            Number(event.target.value)
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="admin-toggle-row">
+                  <div>
+                    <strong>Add allowance to balance</strong>
+                    <small>
+                      Include daily allowance in the final balance.
+                    </small>
+                  </div>
+
+                  <button
+                    className={`admin-switch ${
+                      settings.addAllowanceToBalance
+                        ? 'is-on'
+                        : ''
+                    }`}
+                    type="button"
+                    onClick={() =>
+                      updateSetting(
+                        'addAllowanceToBalance',
+                        !settings.addAllowanceToBalance
+                      )
+                    }
+                  >
+                    <span />
+                    {settings.addAllowanceToBalance
+                      ? 'ON'
+                      : 'OFF'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="admin-section-card">
+            <button
+              className="admin-section-trigger"
+              type="button"
+              onClick={() => toggleAdminSection('deductions')}
+              aria-expanded={adminSection === 'deductions'}
+            >
+              <span className="admin-section-icon">⚠️</span>
+
+              <span className="admin-section-text">
+                <strong>Deduction Rules</strong>
+                <small>
+                  Special percentage and danger zones
+                </small>
+              </span>
+
+              <span className="admin-section-arrow">
+                {adminSection === 'deductions' ? '⌃' : '⌄'}
+              </span>
+            </button>
+
+            {adminSection === 'deductions' && (
+              <div className="admin-section-body">
+                <div className="special-rule-card">
+                  <div>
+                    <span className="rule-label">
+                      SPECIAL DEDUCTION
+                    </span>
+                    <strong>
+                      Selected streamers pay only this percentage
+                      of their normal deduction.
+                    </strong>
+                  </div>
+
+                  <div className="special-percentage-input">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={
+                        settings.specialDeductionPercentage
+                      }
+                      onChange={(event) =>
+                        updateSetting(
+                          'specialDeductionPercentage',
+                          Number(event.target.value)
+                        )
+                      }
+                    />
+                    <span>%</span>
+                  </div>
+                </div>
+
+                <div className="admin-subsection-heading">
+                  <div>
+                    <h2>Danger Zones</h2>
+                    <p>
+                      Apply extra deductions based on earnings.
+                    </p>
+                  </div>
+
+                  <button
+                    className="admin-add-button"
+                    type="button"
+                    onClick={addDangerZone}
+                  >
+                    + Add Zone
+                  </button>
+                </div>
+
+                <div className="danger-zone-list">
+                  {settings.dangerZones.map(
+                    (zone, index) => (
+                      <article
+                        className="admin-danger-card"
+                        key={zone.id}
+                      >
+                        <div className="danger-card-top">
+                          <div>
+                            <span className="zone-number">
+                              {index + 1}
+                            </span>
+                            <strong>
+                              Danger Zone {index + 1}
+                            </strong>
+                          </div>
+
+                          <button
+                            className="admin-delete-button"
+                            type="button"
+                            onClick={() =>
+                              removeDangerZone(zone.id)
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="admin-form-grid">
+                          <div className="form-group">
+                            <label>From</label>
+                            <div className="money-input">
+                              <span>₦</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={zone.min}
+                                onChange={(event) =>
+                                  updateDangerZone(
+                                    zone.id,
+                                    'min',
+                                    event.target.value
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <label>To</label>
+                            <div className="money-input">
+                              <span>₦</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={zone.max}
+                                onChange={(event) =>
+                                  updateDangerZone(
+                                    zone.id,
+                                    'max',
+                                    event.target.value
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          <div className="form-group admin-full-width">
+                            <label>Extra Deduction</label>
+                            <div className="money-input">
+                              <span>₦</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={zone.deduction}
+                                onChange={(event) =>
+                                  updateDangerZone(
+                                    zone.id,
+                                    'deduction',
+                                    event.target.value
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="admin-section-card">
+            <button
+              className="admin-section-trigger"
+              type="button"
+              onClick={() => toggleAdminSection('streamers')}
+              aria-expanded={adminSection === 'streamers'}
+            >
+              <span className="admin-section-icon">👥</span>
+
+              <span className="admin-section-text">
+                <strong>Manage Streamers</strong>
+                <small>
+                  {streamers.length} streamers · edit balances
+                  and special rules
+                </small>
+              </span>
+
+              <span className="admin-section-arrow">
+                {adminSection === 'streamers' ? '⌃' : '⌄'}
+              </span>
+            </button>
+
+            {adminSection === 'streamers' && (
+              <div className="admin-section-body">
+                <div className="admin-subsection-heading">
+                  <div>
+                    <h2>Your Streamers</h2>
+                    <p>
+                      Edit one streamer at a time.
+                    </p>
+                  </div>
+
+                  <button
+                    className="admin-add-button"
+                    type="button"
+                    onClick={addStreamer}
+                  >
+                    + Add Streamer
+                  </button>
+                </div>
+
+                <div className="streamer-admin-list">
+                  {streamers.map((streamer) => {
+                    const isOpen =
+                      expandedStreamerId === streamer.id
+
+                    return (
+                      <article
+                        className={`streamer-admin-card ${
+                          isOpen ? 'expanded' : ''
+                        }`}
+                        key={streamer.id}
+                      >
+                        <div className="streamer-admin-summary">
+                          <div className="streamer-avatar">
+                            {streamer.name
+                              .trim()
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+
+                          <div className="streamer-admin-info">
+                            <strong>{streamer.name}</strong>
+
+                            <span>
+                              {formatNaira(streamer.balance)}
+                            </span>
+                          </div>
+
+                          <div className="streamer-statuses">
+                            {streamer.active === false ? (
+                              <span className="status-pill inactive">
+                                Inactive
+                              </span>
+                            ) : (
+                              <span className="status-pill active">
+                                Active
+                              </span>
+                            )}
+
+                            {streamer.specialDeduction && (
+                              <span className="status-pill special">
+                                {settings.specialDeductionPercentage}%
+                                Special
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            className="streamer-edit-button"
+                            type="button"
+                            onClick={() =>
+                              setExpandedStreamerId(
+                                isOpen ? null : streamer.id
+                              )
+                            }
+                          >
+                            {isOpen ? 'Close' : 'Edit'}
+                          </button>
+                        </div>
+
+                        {isOpen && (
+                          <div className="streamer-admin-editor">
+                            <div className="admin-form-grid">
+                              <div className="form-group admin-full-width">
+                                <label>Streamer Name</label>
+                                <input
+                                  type="text"
+                                  value={streamer.name}
+                                  onChange={(event) =>
+                                    updateStreamer(
+                                      streamer.id,
+                                      'name',
+                                      event.target.value
+                                    )
+                                  }
+                                />
+                              </div>
+
+                              <div className="form-group admin-full-width">
+                                <label>Current Balance</label>
+                                <div className="money-input">
+                                  <span>₦</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={streamer.balance}
+                                    onChange={(event) =>
+                                      updateStreamer(
+                                        streamer.id,
+                                        'balance',
+                                        Number(
+                                          event.target.value
+                                        )
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="admin-toggle-row">
+                              <div>
+                                <strong>
+                                  Special deduction
+                                </strong>
+                                <small>
+                                  Apply the{' '}
+                                  {
+                                    settings.specialDeductionPercentage
+                                  }
+                                  % special rule.
+                                </small>
+                              </div>
+
+                              <button
+                                className={`admin-switch ${
+                                  streamer.specialDeduction
+                                    ? 'is-on'
+                                    : ''
+                                }`}
+                                type="button"
+                                onClick={() =>
+                                  updateStreamer(
+                                    streamer.id,
+                                    'specialDeduction',
+                                    !streamer.specialDeduction
+                                  )
+                                }
+                              >
+                                <span />
+                                {streamer.specialDeduction
+                                  ? 'ON'
+                                  : 'OFF'}
+                              </button>
+                            </div>
+
+                            <div className="admin-toggle-row">
+                              <div>
+                                <strong>
+                                  Active streamer
+                                </strong>
+                                <small>
+                                  Show this streamer in the
+                                  calculator.
+                                </small>
+                              </div>
+
+                              <button
+                                className={`admin-switch ${
+                                  streamer.active !== false
+                                    ? 'is-on'
+                                    : ''
+                                }`}
+                                type="button"
+                                onClick={() =>
+                                  updateStreamer(
+                                    streamer.id,
+                                    'active',
+                                    streamer.active === false
+                                  )
+                                }
+                              >
+                                <span />
+                                {streamer.active !== false
+                                  ? 'ON'
+                                  : 'OFF'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
+        </section>
+      </>
+    )
+  }
+
   function renderPlaceholder(title, message) {
     return (
       <>
@@ -316,6 +1092,7 @@ function App() {
   function renderPage() {
     if (activePage === 'calculator') return renderCalculator()
     if (activePage === 'records') return renderRecords()
+    if (activePage === 'admin') return renderAdminSettings()
 
     if (activePage === 'balances') {
       return (
@@ -699,6 +1476,19 @@ TOTAL DEDUCTIONS: ${formatNaira(totalDeductions)}`
     return null
   }
 
+  if (firebaseLoading) {
+    return (
+      <div className="app">
+        <main className="container">
+          <section className="calculator-card">
+            <h2>Loading...</h2>
+            <p>Connecting to your streamer data.</p>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <main className="container">
@@ -735,10 +1525,10 @@ TOTAL DEDUCTIONS: ${formatNaira(totalDeductions)}`
         </button>
 
         <button
-          className={activePage === 'more' ? 'active' : ''}
-          onClick={() => setActivePage('more')}
+          className={activePage === 'admin' ? 'active' : ''}
+          onClick={() => setActivePage('admin')}
         >
-          More
+          Admin
         </button>
       </nav>
     </div>
