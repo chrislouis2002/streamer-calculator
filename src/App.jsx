@@ -1291,13 +1291,7 @@ Status: ${record.status}`
                       const message = `DAILY STREAMER REPORT
 ${reportDate}
 
-${streamerReports}
-
----
-TOTAL EARNINGS: ${formatNaira(totalEarnings)}
-TOTAL BONUS: ${formatNaira(totalBonuses)}
-TOTAL ALLOWANCES: ${formatNaira(totalAllowances)}
-TOTAL DEDUCTIONS: ${formatNaira(totalDeductions)}`
+${streamerReports}`
 
                       window.open(
                         `https://wa.me/?text=${encodeURIComponent(message)}`,
