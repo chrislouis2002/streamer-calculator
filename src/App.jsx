@@ -169,11 +169,15 @@ function App() {
   }, [records, firebaseReady])
 
   function handleCalculate() {
-    const streamer = streamers.find((person) => person.id === streamerId)
+    const streamer = streamers.find(
+      (person) => person.id === streamerId
+    )
     const earningsAmount = Number(earnings)
 
     if (!streamer || earnings === '' || earningsAmount < 0) {
-      alert('Please select a streamer and enter a valid earnings amount.')
+      alert(
+        'Please select a streamer and enter a valid earnings amount.'
+      )
       return
     }
 
@@ -185,7 +189,7 @@ function App() {
 
     if (existingRecord) {
       alert(
-        'A record already exists for this streamer on this date. Editing will be added later.'
+        'A saved record already exists for this streamer on this date. Please edit the existing record instead.'
       )
       return
     }
@@ -238,7 +242,7 @@ function App() {
       status = 'BELOW TARGET ⚠️'
     }
 
-    const newRecord = {
+    const calculatedRecord = {
       id: `${streamerId}-${date}`,
       streamerId,
       streamerName: streamer.name,
@@ -255,25 +259,51 @@ function App() {
       status,
     }
 
+    setResult({
+      streamer,
+      ...calculatedRecord,
+    })
+  }
+
+  function handleSaveRecord() {
+    if (!result) {
+      alert('Please calculate the result first.')
+      return
+    }
+
+    const existingRecord = records.find(
+      (record) => record.id === result.id
+    )
+
+    if (existingRecord) {
+      alert(
+        'This record has already been saved.'
+      )
+      return
+    }
+
+    const { streamer, ...recordToSave } = result
+
     setRecords((currentRecords) => [
       ...currentRecords,
-      newRecord,
+      recordToSave,
     ])
 
     setStreamers((currentStreamers) =>
       currentStreamers.map((person) =>
-        person.id === streamerId
-          ? { ...person, balance: newBalance }
+        person.id === result.streamerId
+          ? {
+              ...person,
+              balance: result.newBalance,
+            }
           : person
       )
     )
 
-    setResult({
-      streamer,
-      ...newRecord,
-    })
+    alert('Record saved successfully.')
 
-    alert('Calculation saved successfully.')
+    setResult(null)
+    setEarnings('')
   }
 
   function renderCalculator() {
@@ -334,7 +364,7 @@ function App() {
             type="button"
             onClick={handleCalculate}
           >
-            CALCULATE & SAVE
+            CALCULATE
           </button>
         </section>
 
@@ -364,7 +394,14 @@ function App() {
             <p className="new-balance">
               New Balance: {formatNaira(result.newBalance)}
             </p>
-            
+
+            <button
+              className="save-record-button"
+              type="button"
+              onClick={handleSaveRecord}
+            >
+              SAVE RECORD
+            </button>
           </section>
         )}
       </>
