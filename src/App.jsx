@@ -64,6 +64,8 @@ function App() {
   const [streamerId, setStreamerId] = useState('')
   const [earnings, setEarnings] = useState('')
   const [result, setResult] = useState(null)
+  const [editingRecordId, setEditingRecordId] = useState(null)
+  const [editEarnings, setEditEarnings] = useState('')
   const [firebaseReady, setFirebaseReady] = useState(false)
   const [firebaseLoading, setFirebaseLoading] = useState(true)
 
@@ -408,6 +410,159 @@ function App() {
     )
   }
 
+  function startEditingRecord(record) {
+    setEditingRecordId(record.id)
+    setEditEarnings(String(record.earnings))
+  }
+
+  function cancelEditingRecord() {
+    setEditingRecordId(null)
+    setEditEarnings('')
+  }
+
+  function saveRecordChanges(record) {
+    const earningsAmount = Number(editEarnings)
+
+    if (editEarnings === '' || earningsAmount < 0) {
+      alert('Please enter a valid earnings amount.')
+      return
+    }
+
+    const streamer = streamers.find(
+      (person) => person.id === record.streamerId
+    )
+
+    if (!streamer) {
+      alert('Could not find the streamer for this record.')
+      return
+    }
+
+    const bonus =
+      earningsAmount > settings.target
+        ? (earningsAmount - settings.target) *
+          (settings.bonusPercentage / 100)
+        : 0
+
+    const allowance =
+      earningsAmount >= settings.target
+        ? settings.targetAllowance
+        : earningsAmount *
+          (settings.allowancePercentage / 100)
+
+    const normalDeduction =
+      earningsAmount < settings.target
+        ? settings.target - earningsAmount
+        : 0
+
+    const extraDeduction = getDangerDeduction(
+      earningsAmount,
+      settings.dangerZones
+    )
+
+    const totalStandardDeductions =
+      normalDeduction + extraDeduction
+
+    const tenPercentDeduction = streamer.specialDeduction
+      ? totalStandardDeductions *
+        (settings.specialDeductionPercentage / 100)
+      : 0
+
+    const actualDeduction = streamer.specialDeduction
+      ? tenPercentDeduction
+      : totalStandardDeductions
+
+    const oldBalanceEffect =
+      record.newBalance - record.previousBalance
+
+    const newBalanceEffect =
+      bonus +
+      (settings.addAllowanceToBalance ? allowance : 0) -
+      actualDeduction
+
+    const correctedBalance =
+      streamer.balance -
+      oldBalanceEffect +
+      newBalanceEffect
+
+    let status = 'BELOW THRESHOLD 🚨'
+
+    if (earningsAmount >= settings.target) {
+      status = 'TARGET ACHIEVED ✅'
+    } else if (earningsAmount >= 26000) {
+      status = 'BELOW TARGET ⚠️'
+    }
+
+    const updatedRecord = {
+      ...record,
+      earnings: earningsAmount,
+      bonus,
+      allowance,
+      normalDeduction,
+      extraDeduction,
+      tenPercentDeduction,
+      actualDeduction,
+      newBalance:
+        record.previousBalance + newBalanceEffect,
+      status,
+    }
+
+    setRecords((currentRecords) =>
+      currentRecords.map((currentRecord) =>
+        currentRecord.id === record.id
+          ? updatedRecord
+          : currentRecord
+      )
+    )
+
+    setStreamers((currentStreamers) =>
+      currentStreamers.map((person) =>
+        person.id === record.streamerId
+          ? { ...person, balance: correctedBalance }
+          : person
+      )
+    )
+
+    setEditingRecordId(null)
+    setEditEarnings('')
+
+    alert('Record updated successfully.')
+  }
+
+  function deleteRecord(record) {
+    const confirmed = window.confirm(
+      `Delete the record for ${record.streamerName} on ${record.date}?`
+    )
+
+    if (!confirmed) return
+
+    const balanceEffect =
+      record.newBalance - record.previousBalance
+
+    setRecords((currentRecords) =>
+      currentRecords.filter(
+        (currentRecord) => currentRecord.id !== record.id
+      )
+    )
+
+    setStreamers((currentStreamers) =>
+      currentStreamers.map((person) =>
+        person.id === record.streamerId
+          ? {
+              ...person,
+              balance: person.balance - balanceEffect,
+            }
+          : person
+      )
+    )
+
+    if (editingRecordId === record.id) {
+      setEditingRecordId(null)
+      setEditEarnings('')
+    }
+
+    alert('Record deleted successfully.')
+  }
+
   function renderRecords() {
     return (
       <>
@@ -432,16 +587,79 @@ function App() {
                   <strong>{formatNaira(record.newBalance)}</strong>
                 </div>
 
-                <div className="record-details">
-                  <p>Earnings: {formatNaira(record.earnings)}</p>
-                  <p>Bonus: {formatNaira(record.bonus)}</p>
-                  <p>Allowance: {formatNaira(record.allowance)}</p>
-                  <p>
-                    Deduction Applied:{' '}
-                    {formatNaira(record.actualDeduction)}
-                  </p>
-                  <p>Status: {record.status}</p>
-                </div>
+                {editingRecordId === record.id ? (
+                  <div className="record-edit-form">
+                    <div className="form-group">
+                      <label>Edit Earnings</label>
+                      <div className="money-input">
+                        <span>₦</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={editEarnings}
+                          onChange={(event) =>
+                            setEditEarnings(event.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="record-action-row">
+                      <button
+                        className="save-changes-button"
+                        type="button"
+                        onClick={() => saveRecordChanges(record)}
+                      >
+                        SAVE CHANGES
+                      </button>
+
+                      <button
+                        className="cancel-record-button"
+                        type="button"
+                        onClick={cancelEditingRecord}
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="record-details">
+                      <p>
+                        Earnings: {formatNaira(record.earnings)}
+                      </p>
+                      <p>
+                        Bonus: {formatNaira(record.bonus)}
+                      </p>
+                      <p>
+                        Allowance: {formatNaira(record.allowance)}
+                      </p>
+                      <p>
+                        Deduction Applied:{' '}
+                        {formatNaira(record.actualDeduction)}
+                      </p>
+                      <p>Status: {record.status}</p>
+                    </div>
+
+                    <div className="record-action-row">
+                      <button
+                        className="edit-record-button"
+                        type="button"
+                        onClick={() => startEditingRecord(record)}
+                      >
+                        ✏️ EDIT
+                      </button>
+
+                      <button
+                        className="delete-record-button"
+                        type="button"
+                        onClick={() => deleteRecord(record)}
+                      >
+                        🗑️ DELETE
+                      </button>
+                    </div>
+                  </>
+                )}
               </article>
             ))}
           </section>

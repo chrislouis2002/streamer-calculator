@@ -1092,3 +1092,60 @@
 .save-record-button:active {
   transform: translateY(0);
 }
+
+.record-edit-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.record-action-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.record-action-row button {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.record-action-row button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.edit-record-button {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+}
+
+.delete-record-button {
+  border: none;
+  background: #dc2626;
+  color: white;
+}
+
+.save-changes-button {
+  border: none;
+  background: #16a34a;
+  color: white;
+}
+
+.cancel-record-button {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+}
+
+@media (max-width: 480px) {
+  .record-action-row {
+    flex-direction: column;
+  }
+}
