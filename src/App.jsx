@@ -5,51 +5,89 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  deleteDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import './App.css'
 
-const startingStreamers = [
-  { id: 'fantasy', name: 'Fantasy / Ade', balance: 1025000, specialDeduction: false },
-  { id: 'daisy', name: 'Daisy', balance: 1139000, specialDeduction: false },
-  { id: 'vip', name: 'VIP / Mona', balance: 204000, specialDeduction: true },
-  { id: 'nini', name: 'Nini / Paris', balance: 202000, specialDeduction: false },
-  { id: 'sicily', name: 'Sicily / Success', balance: 290000, specialDeduction: false },
-  { id: 'treasure', name: 'Treasure / Tokyo', balance: 140000, specialDeduction: false },
-  { id: 'lora', name: 'Lora', balance: 934000, specialDeduction: false },
-  { id: 'bliss', name: 'Bliss / Ivy', balance: 959000, specialDeduction: false },
-  { id: 'dammy', name: 'Dammy / Exclusive', balance: 1828000, specialDeduction: false },
-  { id: 'nova', name: 'Nova / Preshie', balance: 1778000, specialDeduction: false },
-]
 
 const defaultSettings = {
-  target: 45000,
-  bonusPercentage: 50,
-  allowancePercentage: 10,
-  targetAllowance: 5000,
+  // Blank, unsaved configuration only. Calculations stay blocked until
+  // an administrator enters and explicitly saves valid values.
+  target: '',
+  deductionMode: 'percentage',
+  deductionPercentage: '',
+  personalBonusRate: '',
+  allowancePercentage: '',
+  allowanceCap: '',
+  bonusTiers: [],
   addAllowanceToBalance: false,
-  specialDeductionPercentage: 10,
-  dangerZones: [
-    { id: 'zone-1', min: 0, max: 5000, deduction: 195000 },
-    { id: 'zone-2', min: 6000, max: 15000, deduction: 150000 },
-    { id: 'zone-3', min: 16000, max: 25000, deduction: 90000 },
-  ],
 }
 
 function formatNaira(amount) {
   return `₦${Math.round(amount).toLocaleString('en-NG')}`
 }
 
-function getDangerDeduction(earnings, dangerZones) {
-  const matchingZone = dangerZones.find(
-    (zone) =>
-      earnings >= Number(zone.min) &&
-      earnings <= Number(zone.max)
-  )
+function validateSettings(settings) {
+  const requiredNumbers = ['target', 'deductionPercentage', 'allowancePercentage', 'allowanceCap', 'personalBonusRate']
+  for (const key of requiredNumbers) {
+    if (settings[key] === '' || settings[key] === null || !Number.isFinite(Number(settings[key])) || Number(settings[key]) < 0) {
+      throw new Error(`Enter a valid non-negative value for ${key} in Admin.`)
+    }
+  }
+  if (Number(settings.deductionPercentage) > 100 || Number(settings.allowancePercentage) > 100 || Number(settings.personalBonusRate) > 100) {
+    throw new Error('Percentage settings must be between 0 and 100.')
+  }
+  if (!['percentage', 'fullShortfall'].includes(settings.deductionMode)) {
+    throw new Error('Choose a valid deduction mode in Admin.')
+  }
+  if (!Array.isArray(settings.bonusTiers) || settings.bonusTiers.length === 0 || settings.bonusTiers.some(t => t.threshold === '' || t.amount === '' || !Number.isFinite(Number(t.threshold)) || !Number.isFinite(Number(t.amount)) || Number(t.threshold) < 0 || Number(t.amount) < 0)) {
+    throw new Error('Add at least one valid bonus tier in Admin.')
+  }
+}
 
-  return matchingZone
-    ? Number(matchingZone.deduction)
-    : 0
+function calculateNewRules(earnings, openingBalance, settings) {
+  if (!settings || !Number.isFinite(Number(settings.target)) || settings.target < 0) {
+    throw new Error('Save valid calculation settings in Admin before calculating.');
+  }
+  const earningsValue = Number(earnings);
+  const previousBalance = Number(openingBalance);
+  if (!Number.isFinite(earningsValue) || earningsValue < 0 || !Number.isFinite(previousBalance)) {
+    throw new Error('Earnings and opening balance must be valid numbers.');
+  }
+  const dailyTarget = Number(settings.target);
+  const shortfall = Math.max(0, dailyTarget - earningsValue);
+  const deductionMode = settings.deductionMode;
+  if (!['percentage', 'fullShortfall'].includes(deductionMode)) {
+    throw new Error('Choose a valid deduction mode in Admin and save settings.');
+  }
+  const deductionPercentage = Number(settings.deductionPercentage);
+  const allowanceRate = Number(settings.allowancePercentage);
+  const allowanceCap = Number(settings.allowanceCap);
+  const personalBonusRate = Number(settings.personalBonusRate);
+  if (![deductionPercentage, allowanceRate, allowanceCap, personalBonusRate].every(Number.isFinite) || deductionPercentage < 0 || deductionPercentage > 100 || allowanceRate < 0 || allowanceRate > 100 || allowanceCap < 0 || personalBonusRate < 0 || personalBonusRate > 100) {
+    throw new Error('One or more Admin calculation settings are invalid. Save valid settings before calculating.');
+  }
+  const actualDeduction = deductionMode === 'fullShortfall' ? shortfall : shortfall * deductionPercentage / 100;
+  const bonusTiers = settings.bonusTiers;
+  if (!Array.isArray(bonusTiers) || bonusTiers.length === 0 || bonusTiers.some(t => !Number.isFinite(Number(t.threshold)) || !Number.isFinite(Number(t.amount)) || Number(t.threshold) < 0 || Number(t.amount) < 0)) {
+    throw new Error('Bonus tiers are missing or invalid. Check Admin settings.');
+  }
+  const qualifyingTier = [...bonusTiers].sort((a, b) => Number(b.threshold) - Number(a.threshold)).find(tier => earningsValue >= Number(tier.threshold));
+  const bonus = qualifyingTier ? Number(qualifyingTier.amount) : 0;
+  const allowance = Math.min(earningsValue, allowanceCap) * allowanceRate / 100;
+  const extraBonus = Math.max(0, earningsValue - dailyTarget) * personalBonusRate / 100;
+  const allowanceInBalance = settings.addAllowanceToBalance === true ? allowance : 0;
+  const newBalance = Math.max(0, previousBalance + bonus + allowanceInBalance - actualDeduction);
+  return {
+    earnings: earningsValue, target: dailyTarget,
+    status: earningsValue >= dailyTarget ? 'Target achieved' : 'Below target',
+    allowance, bonus, extraBonus, actualDeduction,
+    normalDeduction: actualDeduction, extraDeduction: 0, tenPercentDeduction: 0,
+    previousBalance, newBalance, deductionMode,
+    deductionPercentage: deductionMode === 'percentage' ? deductionPercentage : null,
+    shortfall,
+  };
 }
 
 function App() {
@@ -57,7 +95,7 @@ function App() {
   const [adminSection, setAdminSection] = useState('')
   const [expandedStreamerId, setExpandedStreamerId] = useState(null)
   const [selectedAdminStreamerId, setSelectedAdminStreamerId] = useState('')
-  const [streamers, setStreamers] = useState(startingStreamers)
+  const [streamers, setStreamers] = useState([])
   const [settings, setSettings] = useState(defaultSettings)
   const [records, setRecords] = useState([])
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -67,6 +105,7 @@ function App() {
   const [editingRecordId, setEditingRecordId] = useState(null)
   const [editEarnings, setEditEarnings] = useState('')
   const [firebaseReady, setFirebaseReady] = useState(false)
+  const [settingsConfigured, setSettingsConfigured] = useState(false)
   const [firebaseLoading, setFirebaseLoading] = useState(true)
 
   useEffect(() => {
@@ -74,103 +113,88 @@ function App() {
       try {
         const settingsSnapshot = await getDoc(doc(db, 'settings', 'app'))
 
+
         if (settingsSnapshot.exists()) {
-          setSettings(settingsSnapshot.data())
+          const loadedSettings = { ...defaultSettings, ...settingsSnapshot.data() }
+          setSettings(loadedSettings)
+          setSettingsConfigured(true)
         } else {
-          await setDoc(
-            doc(db, 'settings', 'app'),
-            defaultSettings
-          )
+          setSettings(defaultSettings)
+          setSettingsConfigured(false)
         }
 
-        const streamersSnapshot = await getDocs(
-          collection(db, 'streamers')
+
+        const streamersSnapshot = await getDocs(collection(db, 'streamers'))
+        setStreamers(
+          streamersSnapshot.docs.map((snapshot) => ({
+            id: snapshot.id,
+            ...snapshot.data(),
+          }))
         )
 
-        if (!streamersSnapshot.empty) {
-          setStreamers(
-            streamersSnapshot.docs.map((snapshot) => ({
-              id: snapshot.id,
-              ...snapshot.data(),
-            }))
-          )
-        } else {
-          await Promise.all(
-            startingStreamers.map((streamer) =>
-              setDoc(
-                doc(db, 'streamers', streamer.id),
-                streamer
-              )
-            )
-          )
-        }
 
-        const recordsSnapshot = await getDocs(
-          collection(db, 'records')
+        const recordsSnapshot = await getDocs(collection(db, 'records'))
+        setRecords(
+          recordsSnapshot.docs.map((snapshot) => ({
+            id: snapshot.id,
+            ...snapshot.data(),
+          }))
         )
 
-        if (!recordsSnapshot.empty) {
-          setRecords(
-            recordsSnapshot.docs.map((snapshot) => ({
-              id: snapshot.id,
-              ...snapshot.data(),
-            }))
-          )
-        }
 
         setFirebaseReady(true)
       } catch (error) {
         console.error('Firebase loading error:', error)
-        alert(
-          'Could not connect to Firebase. Check your Firestore setup and rules.'
-        )
+        alert('Could not connect to Firebase. Check your Firestore setup and rules.')
       } finally {
         setFirebaseLoading(false)
       }
     }
 
+
     loadFirebaseData()
   }, [])
 
-  useEffect(() => {
-    if (!firebaseReady) return
 
-    setDoc(doc(db, 'settings', 'app'), settings).catch((error) => {
+  async function saveSettings() {
+    try {
+      validateSettings(settings)
+    } catch (error) {
+      alert(error.message)
+      return
+    }
+
+
+    try {
+      const settingsToSave = {
+        ...settings,
+        personalBonusRate: Number(settings.personalBonusRate),
+      }
+      await setDoc(doc(db, 'settings', 'app'), settingsToSave, { merge: true })
+      setSettings((current) => ({
+        ...current,
+        personalBonusRate: Number(current.personalBonusRate),
+      }))
+      setSettingsConfigured(true)
+      alert('Settings saved to Firestore successfully.')
+    } catch (error) {
       console.error('Firebase settings save error:', error)
-    })
-  }, [settings, firebaseReady])
+      alert(`Could not save settings: ${error.message || 'Check your connection and Firestore rules.'}`)
+    }
+  }
 
-  useEffect(() => {
-    if (!firebaseReady) return
+  async function persistStreamer(streamer) {
+    const { id, ...streamerData } = streamer
+    await setDoc(doc(db, 'streamers', id), streamerData)
+  }
 
-    streamers.forEach((streamer) => {
-      const { id, ...streamerData } = streamer
-
-      setDoc(
-        doc(db, 'streamers', id),
-        streamerData
-      ).catch((error) => {
-        console.error('Firebase streamer save error:', error)
-      })
-    })
-  }, [streamers, firebaseReady])
-
-  useEffect(() => {
-    if (!firebaseReady) return
-
-    records.forEach((record) => {
-      const { id, ...recordData } = record
-
-      setDoc(
-        doc(db, 'records', id),
-        recordData
-      ).catch((error) => {
-        console.error('Firebase record save error:', error)
-      })
-    })
-  }, [records, firebaseReady])
+  async function persistRecord(record) {
+    const { id, ...recordData } = record
+    await setDoc(doc(db, 'records', id), recordData)
+  }
 
   function handleCalculate() {
+    if (!settingsConfigured) { alert('Calculation settings have not been saved to Firestore yet. Open Admin, enter all required values, and explicitly save them first.'); return }
     const streamer = streamers.find(
       (person) => person.id === streamerId
     )
@@ -196,69 +220,22 @@ function App() {
       return
     }
 
-    const bonus =
-      earningsAmount > settings.target
-        ? (earningsAmount - settings.target) *
-          (settings.bonusPercentage / 100)
-        : 0
-
-    const allowance =
-      earningsAmount >= settings.target
-        ? settings.targetAllowance
-        : earningsAmount *
-          (settings.allowancePercentage / 100)
-
-    const normalDeduction =
-      earningsAmount < settings.target
-        ? settings.target - earningsAmount
-        : 0
-
-    const extraDeduction = getDangerDeduction(
-      earningsAmount,
-      settings.dangerZones
-    )
-
-    const totalStandardDeductions =
-      normalDeduction + extraDeduction
-
-    const tenPercentDeduction = streamer.specialDeduction
-      ? totalStandardDeductions *
-        (settings.specialDeductionPercentage / 100)
-      : 0
-
-    const actualDeduction = streamer.specialDeduction
-      ? tenPercentDeduction
-      : totalStandardDeductions
-
-    const newBalance =
-      streamer.balance +
-      bonus +
-      (settings.addAllowanceToBalance ? allowance : 0) -
-      actualDeduction
-
-    let status = 'BELOW THRESHOLD 🚨'
-
-    if (earningsAmount >= settings.target) {
-      status = 'TARGET ACHIEVED ✅'
-    } else if (earningsAmount >= 26000) {
-      status = 'BELOW TARGET ⚠️'
+    let calculation
+    try {
+      calculation = calculateNewRules(earningsAmount, streamer.balance, settings)
+    } catch (error) {
+      alert(error.message || 'Could not calculate using the current settings.')
+      return
     }
+
 
     const calculatedRecord = {
       id: `${streamerId}-${date}`,
       streamerId,
       streamerName: streamer.name,
       date,
-      earnings: earningsAmount,
-      bonus,
-      allowance,
-      normalDeduction,
-      extraDeduction,
-      tenPercentDeduction,
-      actualDeduction,
+      ...calculation,
       previousBalance: streamer.balance,
-      newBalance,
-      status,
     }
 
     setResult({
@@ -267,7 +244,7 @@ function App() {
     })
   }
 
-  function handleSaveRecord() {
+  async function handleSaveRecord() {
     if (!result) {
       alert('Please calculate the result first.')
       return
@@ -286,26 +263,27 @@ function App() {
 
     const { streamer, ...recordToSave } = result
 
-    setRecords((currentRecords) => [
-      ...currentRecords,
-      recordToSave,
-    ])
+    const updatedStreamer = {
+      ...streamer,
+      balance: result.newBalance,
+    }
 
-    setStreamers((currentStreamers) =>
-      currentStreamers.map((person) =>
-        person.id === result.streamerId
-          ? {
-              ...person,
-              balance: result.newBalance,
-            }
-          : person
+    try {
+      await persistRecord(recordToSave)
+      await persistStreamer(updatedStreamer)
+      setRecords((currentRecords) => [...currentRecords, recordToSave])
+      setStreamers((currentStreamers) =>
+        currentStreamers.map((person) =>
+          person.id === result.streamerId ? updatedStreamer : person
+        )
       )
-    )
-
-    alert('Record saved successfully.')
-
-    setResult(null)
-    setEarnings('')
+      alert('Record saved successfully.')
+      setResult(null)
+      setEarnings('')
+    } catch (error) {
+      console.error('Record save error:', error)
+      alert('Could not save the record to Firestore. No local success was reported.')
+    }
   }
 
   function renderCalculator() {
@@ -376,18 +354,19 @@ function App() {
             <p>Date: {result.date}</p>
             <p>Today's Earnings: {formatNaira(result.earnings)}</p>
             <p className="status">STATUS: {result.status}</p>
-            <p>Target: {formatNaira(settings.target)}</p>
-            <p>Daily Bonus: {formatNaira(result.bonus)}</p>
             <p>Daily Allowance: {formatNaira(result.allowance)}</p>
-            <p>Normal Deduction: {formatNaira(result.normalDeduction)}</p>
-            <p>Extra Deduction: {formatNaira(result.extraDeduction)}</p>
             <p>
-              Special 10% Deduction:{' '}
-              {formatNaira(result.tenPercentDeduction)}
+              Fixed Deduction Before Allowance:{' '}
+              {formatNaira(result.normalDeduction)}
             </p>
             <p>
-              Total Deduction Applied:{' '}
+              Actual Deduction Applied:{' '}
               {formatNaira(result.actualDeduction)}
+            </p>
+            <p>Target Bonus: {formatNaira(result.bonus)}</p>
+            <p>
+              Extra Bonus (not added to balance):{' '}
+              {formatNaira(result.extraBonus)}
             </p>
             <p>
               Previous Balance:{' '}
@@ -420,7 +399,7 @@ function App() {
     setEditEarnings('')
   }
 
-  function saveRecordChanges(record) {
+  async function saveRecordChanges(record) {
     const earningsAmount = Number(editEarnings)
 
     if (editEarnings === '' || earningsAmount < 0) {
@@ -437,98 +416,58 @@ function App() {
       return
     }
 
-    const bonus =
-      earningsAmount > settings.target
-        ? (earningsAmount - settings.target) *
-          (settings.bonusPercentage / 100)
-        : 0
-
-    const allowance =
-      earningsAmount >= settings.target
-        ? settings.targetAllowance
-        : earningsAmount *
-          (settings.allowancePercentage / 100)
-
-    const normalDeduction =
-      earningsAmount < settings.target
-        ? settings.target - earningsAmount
-        : 0
-
-    const extraDeduction = getDangerDeduction(
+    const calculation = calculateNewRules(
       earningsAmount,
-      settings.dangerZones
+      record.previousBalance,
+      settings
     )
 
-    const totalStandardDeductions =
-      normalDeduction + extraDeduction
-
-    const tenPercentDeduction = streamer.specialDeduction
-      ? totalStandardDeductions *
-        (settings.specialDeductionPercentage / 100)
-      : 0
-
-    const actualDeduction = streamer.specialDeduction
-      ? tenPercentDeduction
-      : totalStandardDeductions
 
     const oldBalanceEffect =
       record.newBalance - record.previousBalance
 
+
     const newBalanceEffect =
-      bonus +
-      (settings.addAllowanceToBalance ? allowance : 0) -
-      actualDeduction
+      calculation.newBalance - record.previousBalance
+
 
     const correctedBalance =
       streamer.balance -
       oldBalanceEffect +
       newBalanceEffect
 
-    let status = 'BELOW THRESHOLD 🚨'
-
-    if (earningsAmount >= settings.target) {
-      status = 'TARGET ACHIEVED ✅'
-    } else if (earningsAmount >= 26000) {
-      status = 'BELOW TARGET ⚠️'
-    }
 
     const updatedRecord = {
       ...record,
-      earnings: earningsAmount,
-      bonus,
-      allowance,
-      normalDeduction,
-      extraDeduction,
-      tenPercentDeduction,
-      actualDeduction,
-      newBalance:
-        record.previousBalance + newBalanceEffect,
-      status,
+      ...calculation,
+      newBalance: calculation.newBalance,
     }
 
-    setRecords((currentRecords) =>
-      currentRecords.map((currentRecord) =>
-        currentRecord.id === record.id
-          ? updatedRecord
-          : currentRecord
+
+    const updatedStreamer = { ...streamer, balance: correctedBalance }
+    try {
+      await persistRecord(updatedRecord)
+      await persistStreamer(updatedStreamer)
+      setRecords((currentRecords) =>
+        currentRecords.map((currentRecord) =>
+          currentRecord.id === record.id ? updatedRecord : currentRecord
+        )
       )
-    )
-
-    setStreamers((currentStreamers) =>
-      currentStreamers.map((person) =>
-        person.id === record.streamerId
-          ? { ...person, balance: correctedBalance }
-          : person
+      setStreamers((currentStreamers) =>
+        currentStreamers.map((person) =>
+          person.id === record.streamerId ? updatedStreamer : person
+        )
       )
-    )
-
-    setEditingRecordId(null)
-    setEditEarnings('')
-
-    alert('Record updated successfully.')
+      setEditingRecordId(null)
+      setEditEarnings('')
+      alert('Record updated successfully.')
+    } catch (error) {
+      console.error('Record update error:', error)
+      alert('Could not update the record in Firestore.')
+    }
   }
 
-  function deleteRecord(record) {
+  async function deleteRecord(record) {
     const confirmed = window.confirm(
       `Delete the record for ${record.streamerName} on ${record.date}?`
     )
@@ -538,22 +477,29 @@ function App() {
     const balanceEffect =
       record.newBalance - record.previousBalance
 
-    setRecords((currentRecords) =>
-      currentRecords.filter(
-        (currentRecord) => currentRecord.id !== record.id
-      )
-    )
+    const streamer = streamers.find((person) => person.id === record.streamerId)
+    const updatedStreamer = streamer
+      ? { ...streamer, balance: Math.max(0, streamer.balance - balanceEffect) }
+      : null
 
-    setStreamers((currentStreamers) =>
-      currentStreamers.map((person) =>
-        person.id === record.streamerId
-          ? {
-              ...person,
-              balance: person.balance - balanceEffect,
-            }
-          : person
+    try {
+      await deleteDoc(doc(db, 'records', record.id))
+      if (updatedStreamer) await persistStreamer(updatedStreamer)
+      setRecords((currentRecords) =>
+        currentRecords.filter((currentRecord) => currentRecord.id !== record.id)
       )
-    )
+      if (updatedStreamer) {
+        setStreamers((currentStreamers) =>
+          currentStreamers.map((person) =>
+            person.id === record.streamerId ? updatedStreamer : person
+          )
+        )
+      }
+    } catch (error) {
+      console.error('Record delete error:', error)
+      alert('Could not delete the record from Firestore.')
+      return
+    }
 
     if (editingRecordId === record.id) {
       setEditingRecordId(null)
@@ -686,41 +632,6 @@ function App() {
     )
   }
 
-  function updateDangerZone(id, key, value) {
-    setSettings((currentSettings) => ({
-      ...currentSettings,
-      dangerZones: currentSettings.dangerZones.map((zone) =>
-        zone.id === id
-          ? { ...zone, [key]: Number(value) }
-          : zone
-      ),
-    }))
-  }
-
-  function addDangerZone() {
-    setSettings((currentSettings) => ({
-      ...currentSettings,
-      dangerZones: [
-        ...currentSettings.dangerZones,
-        {
-          id: `zone-${Date.now()}`,
-          min: 0,
-          max: 0,
-          deduction: 0,
-        },
-      ],
-    }))
-  }
-
-  function removeDangerZone(id) {
-    setSettings((currentSettings) => ({
-      ...currentSettings,
-      dangerZones: currentSettings.dangerZones.filter(
-        (zone) => zone.id !== id
-      ),
-    }))
-  }
-
   function addStreamer() {
     const newName = window.prompt(
       'Enter the new streamer name:'
@@ -739,6 +650,66 @@ function App() {
       },
     ])
   }
+
+
+
+  async function deleteStreamer(streamer) {
+    const confirmed = window.confirm(
+      `Delete streamer "${streamer.name}"?\n\n` +
+      `Their saved daily records will be preserved. ` +
+      `This action removes the streamer from the active streamer list.`
+    )
+
+
+    if (!confirmed) return
+
+
+    try {
+      // Delete only the streamer document. Do not touch daily records.
+      await deleteDoc(doc(db, 'streamers', streamer.id))
+
+
+      // Update the interface only after Firestore confirms deletion.
+      setStreamers((current) =>
+        current.filter((person) => person.id !== streamer.id)
+      )
+
+
+      // Clear any unsaved calculation involving this streamer.
+      if (streamerId === streamer.id) {
+        setStreamerId('')
+        setResult(null)
+        setEarnings('')
+      }
+
+
+      if (result?.streamerId === streamer.id) {
+        setResult(null)
+      }
+
+
+      if (expandedStreamerId === streamer.id) {
+        setExpandedStreamerId(null)
+      }
+
+
+      if (selectedAdminStreamerId === streamer.id) {
+        setSelectedAdminStreamerId('')
+      }
+
+
+      alert(
+        `Streamer "${streamer.name}" was deleted. Their historical records were preserved.`
+      )
+    } catch (error) {
+      console.error('Streamer delete error:', error)
+      alert(
+        `Could not delete "${streamer.name}". Please check your connection and Firestore rules.`
+      )
+    }
+  }
+
+
 
   function toggleAdminSection(section) {
     setAdminSection((currentSection) =>
@@ -766,6 +737,9 @@ function App() {
               <small>Active</small>
             </div>
           </div>
+          <button className="admin-add-button" type="button" onClick={saveSettings}>
+            Save Settings to Firestore
+          </button>
         </header>
 
         <section className="admin-dashboard">
@@ -783,7 +757,7 @@ function App() {
               <span className="admin-stat-icon">⚡</span>
               <div>
                 <small>Bonus</small>
-                <strong>{settings.bonusPercentage}%</strong>
+                <strong>{settings.personalBonusRate}%</strong>
               </div>
             </article>
 
@@ -818,6 +792,7 @@ function App() {
             </button>
 
             {adminSection === 'rules' && (
+              <>
               <div className="admin-section-body">
                 <div className="admin-form-grid">
                   <div className="form-group admin-full-width">
@@ -842,25 +817,12 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <label htmlFor="adminBonus">
-                      Bonus Percentage
-                    </label>
+                  
 
+                  <div className="form-group">
+                    <label htmlFor="adminPersonalBonusRate">Personal Extra Bonus Rate</label>
                     <div className="percentage-input">
-                      <input
-                        id="adminBonus"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={settings.bonusPercentage}
-                        onChange={(event) =>
-                          updateSetting(
-                            'bonusPercentage',
-                            Number(event.target.value)
-                          )
-                        }
-                      />
+                      <input id="adminPersonalBonusRate" type="number" min="0" max="100" value={settings.personalBonusRate} onChange={(event) => updateSetting('personalBonusRate', event.target.value === '' ? '' : Number(event.target.value))} />
                       <span>%</span>
                     </div>
                   </div>
@@ -889,20 +851,20 @@ function App() {
                   </div>
 
                   <div className="form-group admin-full-width">
-                    <label htmlFor="adminTargetAllowance">
-                      Allowance When Target Is Reached
+                    <label htmlFor="adminAllowanceCap">
+                      Allowance Earnings Cap
                     </label>
 
                     <div className="money-input">
                       <span>₦</span>
                       <input
-                        id="adminTargetAllowance"
+                        id="adminAllowanceCap"
                         type="number"
                         min="0"
-                        value={settings.targetAllowance}
+                        value={settings.allowanceCap}
                         onChange={(event) =>
                           updateSetting(
-                            'targetAllowance',
+                            'allowanceCap',
                             Number(event.target.value)
                           )
                         }
@@ -910,6 +872,18 @@ function App() {
                     </div>
                   </div>
                 </div>
+
+                <div className="admin-subsection-heading">
+                  <div><h2>Bonus Tiers</h2><p>Only the highest qualifying tier is applied.</p></div>
+                  <button className="admin-add-button" type="button" onClick={() => updateSetting('bonusTiers', [...(settings.bonusTiers || []), { id: `tier-${Date.now()}`, threshold: '', amount: '' }])}>+ Add Tier</button>
+                </div>
+                {(settings.bonusTiers || []).map((tier, index) => (
+                  <div className="admin-form-grid" key={tier.id || index}>
+                    <div className="form-group"><label>Tier {index + 1} earnings threshold</label><div className="money-input"><span>₦</span><input type="number" min="0" value={tier.threshold} onChange={(event) => updateSetting('bonusTiers', settings.bonusTiers.map((item, i) => i === index ? { ...item, threshold: event.target.value === '' ? '' : Number(event.target.value) } : item))} /></div></div>
+                    <div className="form-group"><label>Tier {index + 1} bonus amount</label><div className="money-input"><span>₦</span><input type="number" min="0" value={tier.amount} onChange={(event) => updateSetting('bonusTiers', settings.bonusTiers.map((item, i) => i === index ? { ...item, amount: event.target.value === '' ? '' : Number(event.target.value) } : item))} /></div></div>
+                    <button className="admin-delete-button" type="button" onClick={() => updateSetting('bonusTiers', settings.bonusTiers.filter((_, i) => i !== index))}>Remove Tier</button>
+                  </div>
+                ))}
 
                 <div className="admin-toggle-row">
                   <div>
@@ -940,7 +914,12 @@ function App() {
                   </button>
                 </div>
               </div>
+              </>
             )}
+              <details className="advanced-rules-details">
+                <summary>Calculation safeguards</summary>
+                <p>The core deduction, tier bonus, allowance and balance formulas are enforced by the app. The legacy formula editor is disabled so it cannot introduce unintended deductions.</p>
+              </details>
           </section>
 
           <section className="admin-section-card">
@@ -955,7 +934,7 @@ function App() {
               <span className="admin-section-text">
                 <strong>Deduction Rules</strong>
                 <small>
-                  Special percentage and threshold rules
+                  Choose exactly one deduction rule
                 </small>
               </span>
 
@@ -966,143 +945,37 @@ function App() {
 
             {adminSection === 'deductions' && (
               <div className="admin-section-body">
-                <div className="special-rule-card">
-                  <div>
-                    <span className="rule-label">
-                      SPECIAL DEDUCTION
-                    </span>
-                    <strong>
-                      Selected streamers pay only this percentage
-                      of their normal deduction.
-                    </strong>
-                  </div>
-
-                  <div className="special-percentage-input">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={
-                        settings.specialDeductionPercentage
-                      }
-                      onChange={(event) =>
-                        updateSetting(
-                          'specialDeductionPercentage',
-                          Number(event.target.value)
-                        )
-                      }
-                    />
-                    <span>%</span>
-                  </div>
-                </div>
-
-                <div className="admin-subsection-heading">
-                  <div>
-                    <h2>Danger Zones</h2>
-                    <p>
-                      Apply extra deductions based on earnings.
-                    </p>
-                  </div>
-
-                  <button
-                    className="admin-add-button"
-                    type="button"
-                    onClick={addDangerZone}
+                <div className="form-group admin-full-width">
+                  <label htmlFor="deductionMode">Deduction Calculation Mode</label>
+                  <select
+                    id="deductionMode"
+                    value={settings.deductionMode || 'percentage'}
+                    onChange={(event) => updateSetting('deductionMode', event.target.value)}
                   >
-                    + Add Zone
-                  </button>
-                </div>
-
-                <div className="danger-zone-list">
-                  {settings.dangerZones.map(
-                    (zone, index) => (
-                      <article
-                        className="admin-danger-card"
-                        key={zone.id}
-                      >
-                        <div className="danger-card-top">
-                          <div>
-                            <span className="zone-number">
-                              {index + 1}
-                            </span>
-                            <strong>
-                              Danger Zone {index + 1}
-                            </strong>
-                          </div>
-
-                          <button
-                            className="admin-delete-button"
-                            type="button"
-                            onClick={() =>
-                              removeDangerZone(zone.id)
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-
-                        <div className="admin-form-grid">
-                          <div className="form-group">
-                            <label>From</label>
-                            <div className="money-input">
-                              <span>₦</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={zone.min}
-                                onChange={(event) =>
-                                  updateDangerZone(
-                                    zone.id,
-                                    'min',
-                                    event.target.value
-                                  )
-                                }
-                              />
-                            </div>
-                          </div>
-
-                          <div className="form-group">
-                            <label>To</label>
-                            <div className="money-input">
-                              <span>₦</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={zone.max}
-                                onChange={(event) =>
-                                  updateDangerZone(
-                                    zone.id,
-                                    'max',
-                                    event.target.value
-                                  )
-                                }
-                              />
-                            </div>
-                          </div>
-
-                          <div className="form-group admin-full-width">
-                            <label>Extra Deduction</label>
-                            <div className="money-input">
-                              <span>₦</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={zone.deduction}
-                                onChange={(event) =>
-                                  updateDangerZone(
-                                    zone.id,
-                                    'deduction',
-                                    event.target.value
-                                  )
-                                }
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                    )
+                    <option value="percentage">Percentage of shortfall</option>
+                    <option value="fullShortfall">Full shortfall amount</option>
+                  </select>
+                  {settings.deductionMode !== 'fullShortfall' && settings.deductionMode !== 'actual' && (
+                    <div className="form-group">
+                      <label htmlFor="deductionPercentage">Deduction Percentage</label>
+                      <div className="percentage-input">
+                        <input
+                          id="deductionPercentage"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={settings.deductionPercentage}
+                          onChange={(event) => updateSetting('deductionPercentage', Math.min(100, Math.max(0, Number(event.target.value) || 0)))}
+                        />
+                        <span>%</span>
+                      </div>
+                    </div>
                   )}
+                  <p className="settings-help">
+                    Only this deduction is applied. Special Deduction and Danger Zones are retained for compatibility but do not affect calculations.
+                  </p>
                 </div>
+                <p className="settings-help">Only the deduction mode and percentage above affect deductions. Special deductions and Danger Zones are disabled and never change a balance.</p>
               </div>
             )}
           </section>
@@ -1146,6 +1019,8 @@ function App() {
                   >
                     + Add Streamer
                   </button>
+
+              
                 </div>
 
                 <div className="streamer-admin-list">
@@ -1187,25 +1062,31 @@ function App() {
                               </span>
                             )}
 
-                            {streamer.specialDeduction && (
-                              <span className="status-pill special">
-                                {settings.specialDeductionPercentage}%
-                                Special
-                              </span>
-                            )}
+
                           </div>
 
-                          <button
-                            className="streamer-edit-button"
-                            type="button"
-                            onClick={() =>
-                              setExpandedStreamerId(
-                                isOpen ? null : streamer.id
-                              )
-                            }
-                          >
-                            {isOpen ? 'Close' : 'Edit'}
-                          </button>
+                        <div className="streamer-row-actions">
+  <button
+    className="streamer-edit-button"
+    type="button"
+    onClick={() =>
+      setExpandedStreamerId(
+        isOpen ? null : streamer.id
+      )
+    }
+  >
+    {isOpen ? 'Close' : 'Edit'}
+  </button>
+
+
+  <button
+    className="admin-delete-button"
+    type="button"
+    onClick={() => deleteStreamer(streamer)}
+  >
+    Delete
+  </button>
+</div>
                         </div>
 
                         {isOpen && (
@@ -1248,41 +1129,7 @@ function App() {
                               </div>
                             </div>
 
-                            <div className="admin-toggle-row">
-                              <div>
-                                <strong>
-                                  Special deduction
-                                </strong>
-                                <small>
-                                  Apply the{' '}
-                                  {
-                                    settings.specialDeductionPercentage
-                                  }
-                                  % special rule.
-                                </small>
-                              </div>
-
-                              <button
-                                className={`admin-switch ${
-                                  streamer.specialDeduction
-                                    ? 'is-on'
-                                    : ''
-                                }`}
-                                type="button"
-                                onClick={() =>
-                                  updateStreamer(
-                                    streamer.id,
-                                    'specialDeduction',
-                                    !streamer.specialDeduction
-                                  )
-                                }
-                              >
-                                <span />
-                                {streamer.specialDeduction
-                                  ? 'ON'
-                                  : 'OFF'}
-                              </button>
-                            </div>
+                            <p className="settings-help">Special deductions are disabled for all streamers.</p>
 
                             <div className="admin-toggle-row">
                               <div>
@@ -1316,6 +1163,23 @@ function App() {
                                   : 'OFF'}
                               </button>
                             </div>
+                            <button
+                              className="admin-add-button"
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const currentStreamer = streamers.find((item) => item.id === streamer.id)
+                                  if (!currentStreamer) return
+                                  await persistStreamer(currentStreamer)
+                                  alert('Streamer saved to Firestore.')
+                                } catch (error) {
+                                  console.error('Streamer save error:', error)
+                                  alert('Could not save this streamer.')
+                                }
+                              }}
+                            >
+                              Save Streamer
+                            </button>
                           </div>
                         )}
                       </article>
@@ -1364,9 +1228,7 @@ function App() {
                 <div>
                   <h2>{streamer.name}</h2>
                   <p>
-                    {streamer.specialDeduction
-                      ? 'Special 10% deduction'
-                      : 'Standard deductions'}
+                    {'Uses the Admin deduction rule'}
                   </p>
                 </div>
 
@@ -1408,13 +1270,7 @@ function App() {
       ).length
 
       const belowTarget = todayRecords.filter(
-        (record) =>
-          record.earnings >= 26000 &&
-          record.earnings < settings.target
-      ).length
-
-      const dangerZone = todayRecords.filter(
-        (record) => record.earnings < 26000
+        (record) => record.earnings < settings.target
       ).length
 
       return (
@@ -1513,10 +1369,6 @@ function App() {
                   <strong>{belowTarget}</strong>
                 </div>
 
-                <div className="summary-row">
-                  <span>Danger Zone</span>
-                  <strong>{dangerZone}</strong>
-                </div>
 
                 <div className="report-actions">
                   <button
@@ -1603,28 +1455,6 @@ ${streamerReports}`
             </div>
 
             <div className="form-group">
-              <label htmlFor="bonusPercentage">
-                Bonus Percentage
-              </label>
-              <div className="percentage-input">
-                <input
-                  id="bonusPercentage"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={settings.bonusPercentage}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      bonusPercentage: Number(event.target.value),
-                    }))
-                  }
-                />
-                <span>%</span>
-              </div>
-            </div>
-
-            <div className="form-group">
               <label htmlFor="allowancePercentage">
                 Allowance Percentage
               </label>
@@ -1647,20 +1477,20 @@ ${streamerReports}`
             </div>
 
             <div className="form-group">
-              <label htmlFor="targetAllowance">
-                Target-Achieved Allowance
+              <label htmlFor="legacyAllowanceCap">
+                Allowance Earnings Cap
               </label>
               <div className="money-input">
                 <span>₦</span>
                 <input
-                  id="targetAllowance"
+                  id="legacyAllowanceCap"
                   type="number"
                   min="0"
-                  value={settings.targetAllowance}
+                  value={settings.allowanceCap}
                   onChange={(event) =>
                     setSettings((current) => ({
                       ...current,
-                      targetAllowance: Number(event.target.value),
+                      allowanceCap: Number(event.target.value),
                     }))
                   }
                 />
@@ -1690,34 +1520,8 @@ ${streamerReports}`
               </select>
             </label>
 
-            <div className="form-group">
-              <label htmlFor="specialDeductionPercentage">
-                Special Deduction Percentage
-              </label>
-              <div className="percentage-input">
-                <input
-                  id="specialDeductionPercentage"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={settings.specialDeductionPercentage}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      specialDeductionPercentage: Number(
-                        event.target.value
-                      ),
-                    }))
-                  }
-                />
-                <span>%</span>
-              </div>
-            </div>
+            <p className="settings-help">Special deductions and Danger Zones are disabled. Save changes from the Admin page.</p>
 
-            <p className="settings-help">
-              Special streamers only have this percentage of their
-              normal and danger deductions applied to their balance.
-            </p>
           </section>
         </>
       )
