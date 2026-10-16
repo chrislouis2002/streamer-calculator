@@ -145,6 +145,322 @@
   background: #f3f3f3;
 }
 
+
+/* Profit dashboard */
+.profit-page-header {
+  margin-bottom: 18px;
+}
+
+
+.profit-net-card {
+  padding: 24px;
+  border-radius: 18px;
+  background: #182d25;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(24, 45, 37, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+
+.profit-net-card span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  opacity: 0.8;
+}
+
+
+.profit-net-card strong {
+  font-size: clamp(28px, 7vw, 40px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+
+.profit-net-card p,
+.profit-panel > p {
+  margin: 0;
+}
+
+
+.profit-net-card p {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+
+.profit-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+
+.profit-kpi-card,
+.profit-panel {
+  background: #ffffff;
+  border: 1px solid #e9e9e7;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.035);
+  min-width: 0;
+}
+
+
+.profit-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+
+.profit-kpi-card span {
+  font-size: 12px;
+  color: #666b67;
+  font-weight: 700;
+}
+
+
+.profit-kpi-card strong {
+  font-size: clamp(18px, 4.5vw, 25px);
+  overflow-wrap: anywhere;
+}
+
+
+.profit-kpi-card small {
+  color: #777d78;
+  font-size: 11px;
+}
+
+
+.profit-panel {
+  margin-top: 14px;
+}
+
+
+.profit-panel h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+
+.profit-panel > p {
+  color: #6d716e;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+
+.profit-period-controls,
+.profit-expense-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+
+.profit-period-controls label,
+.profit-expense-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+
+.profit-period-controls input,
+.profit-expense-form input,
+.profit-expense-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #dcdedb;
+  border-radius: 10px;
+  background: #fff;
+  color: #202420;
+  font: inherit;
+}
+
+
+.profit-expense-form label:nth-child(4),
+.profit-expense-form .profit-primary-button {
+  grid-column: 1 / -1;
+}
+
+
+.profit-primary-button,
+.profit-secondary-button {
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+
+.profit-primary-button {
+  border: 0;
+  background: #182d25;
+  color: white;
+}
+
+
+.profit-secondary-button {
+  margin: 14px 8px 0 0;
+  border: 1px solid #d9ddda;
+  background: #f8f9f8;
+  color: #26342c;
+}
+
+
+.profit-validation {
+  margin-top: 10px !important;
+  color: #b42318 !important;
+}
+
+
+.profit-list-heading,
+.profit-expense-row,
+.profit-expense-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+
+.profit-list-heading {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+
+.profit-list-heading h2,
+.profit-list-heading p {
+  margin-bottom: 4px;
+}
+
+
+.profit-list-heading > strong {
+  border-radius: 20px;
+  background: #f0f2ef;
+  padding: 6px 10px;
+}
+
+
+.profit-empty-state {
+  padding: 18px 0;
+  text-align: center;
+}
+
+
+.profit-expense-list {
+  display: grid;
+}
+
+
+.profit-expense-row {
+  align-items: flex-start;
+  border-top: 1px solid #eeeeec;
+  padding: 15px 0;
+}
+
+
+.profit-expense-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+
+.profit-expense-details > strong {
+  overflow-wrap: anywhere;
+}
+
+
+.profit-expense-details > span,
+.profit-expense-details > p {
+  color: #727772;
+  font-size: 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+
+.profit-expense-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+
+.profit-expense-actions > strong {
+  white-space: nowrap;
+}
+
+
+.profit-delete-button {
+  border: 1px solid #f0d0cd;
+  background: #fff7f6;
+  color: #a12a21;
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+
+.profit-disclaimer {
+  color: #6d716e;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 4px 20px;
+}
+
+
+@media (max-width: 600px) {
+  .profit-net-card,
+  .profit-panel,
+  .profit-kpi-card {
+    padding: 15px;
+  }
+
+
+  .profit-period-controls,
+  .profit-expense-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+
+  .profit-expense-form label:nth-child(4),
+  .profit-expense-form .profit-primary-button {
+    grid-column: auto;
+  }
+
+
+  .profit-expense-row {
+    gap: 8px;
+  }
+
+
+  .bottom-nav {
+    overflow-x: auto;
+  }
+
+
+  .bottom-nav button {
+    flex: 1 0 auto;
+    min-width: 62px;
+    padding: 0 8px;
+  }
+}
+
 .balance-list {
   display: grid;
   gap: 14px;
