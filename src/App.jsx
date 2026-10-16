@@ -100,6 +100,7 @@ function App() {
   const [settings, setSettings] = useState(defaultSettings)
   const [records, setRecords] = useState([])
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [summaryDate, setSummaryDate] = useState(new Date().toISOString().split('T')[0])
   const [streamerId, setStreamerId] = useState('')
   const [earnings, setEarnings] = useState('')
   const [result, setResult] = useState(null)
@@ -1249,7 +1250,7 @@ function App() {
 
     if (activePage === 'summary') {
       const todayRecords = records.filter(
-        (record) => record.date === date
+        (record) => record.date === summaryDate
       )
 
       const totalEarnings = todayRecords.reduce(
@@ -1283,9 +1284,31 @@ function App() {
       return (
         <>
           <header className="header">
-            <h1>Today's Summary</h1>
-            <p>{date}</p>
+            <h1>Daily Summary History</h1>
+            <p>Choose a date to view its saved summary.</p>
           </header>
+
+
+          <section className="calculator-card">
+            <div className="form-group">
+              <label htmlFor="summaryDate">Select summary date</label>
+              <input
+                id="summaryDate"
+                type="date"
+                value={summaryDate}
+                onChange={(event) => setSummaryDate(event.target.value)}
+              />
+            </div>
+
+
+            <button
+              type="button"
+              className="admin-add-button"
+              onClick={() => setSummaryDate(new Date().toISOString().split('T')[0])}
+            >
+              Go to Today
+            </button>
+          </section>
 
       
 
@@ -1431,7 +1454,7 @@ function App() {
     
 
 const reportDate = new Date(
-  `${date}T12:00:00`
+  `${summaryDate}T12:00:00`
 ).toLocaleDateString('en-NG', {
   day: 'numeric',
   month: 'long',
