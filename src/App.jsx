@@ -1359,9 +1359,13 @@ function App() {
                    
 
                     <div className="summary-row final-row">
-                      <span>New Salary</span>
+                      <span>
+                        New Salary
+                      </span>
                       <strong>
+
                         {formatNaira(record.balance)} + {formatNaira(record.bonus)} = {formatNaira(record.newBalance)}
+
                       </strong>
 
                       
@@ -1424,20 +1428,60 @@ function App() {
     }
 
 
-    const reportDate = new Date(
-      `${date}T12:00:00`
-    ).toLocaleDateString('en-NG', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).toUpperCase()
+    
+
+const reportDate = new Date(
+  `${date}T12:00:00`
+).toLocaleDateString('en-NG', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+}).toUpperCase()
 
 
-    const message = `DAILY STREAMER REPORT
+const streamerReports = todayRecords
+  .map((record) => {
+    return `${record.streamerName}
+
+
+Previous Salary: ${formatNaira(record.previousBalance)}
+
+
+Earnings: ${formatNaira(record.earnings)}
+
+
+Allowance: ${formatNaira(record.allowance)}
+
+
+Deduction: ${formatNaira(record.actualDeduction)}
+
+
+Balance: ${formatNaira(record.previousBalance)} - ${formatNaira(record.actualDeduction)} = ${formatNaira(record.balance)}
+
+
+Bonus For meeting a Target: ${formatNaira(record.bonus)}
+
+
+Extra Bonus (not added to balance): ${formatNaira(record.extraBonus)}
+
+
+New Salary: ${formatNaira(record.balance)} + ${formatNaira(record.bonus)} = ${formatNaira(record.newBalance)}`
+  })
+  .join('\n\n━━━━━━━━━━━━━━━━━━\n\n')
+
+
+const message = `DAILY STREAMER REPORT
+
+
 ${reportDate}
 
 
-${summary.innerText.trim()}`
+━━━━━━━━━━━━━━━━━━
+
+
+${streamerReports}`
+
+
 
 
     window.open(
