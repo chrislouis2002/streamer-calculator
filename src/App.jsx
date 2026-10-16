@@ -1348,17 +1348,14 @@ function App() {
 
 
                     <div className="summary-row">
-                      <span><p>
+                      <span>
               Extra Bonus (not added to balance):
              
-            </p></span>
+            </span>
                       <strong>
                          {formatNaira(record.extraBonus)}
                       </strong>
                     </div>
-
-                    
-
                    
 
                     <div className="summary-row final-row">
@@ -1366,11 +1363,14 @@ function App() {
                       <strong>
                         {formatNaira(record.balance)} + {formatNaira(record.bonus)} = {formatNaira(record.newBalance)}
                       </strong>
+
+                      
+                      
                     </div>
 
-                    <p className="summary-status">
+                    {/* <p className="summary-status">
                       {record.status}
-                    </p>
+                    </p> */}
                   </article>
                 ))}
               </section>
