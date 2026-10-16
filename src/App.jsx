@@ -1368,9 +1368,6 @@ function App() {
                       
                     </div>
 
-                    {/* <p className="summary-status">
-                      {record.status}
-                    </p> */}
                   </article>
                 ))}
               </section>
