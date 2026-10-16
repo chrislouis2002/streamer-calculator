@@ -135,6 +135,11 @@ export function calculateWithRules(earnings, openingBalance, settings) {
   const allowanceAdded = addAllowanceToBalance ? allowance : 0;
 
 
+  const balance = Math.max(
+    0,
+    opening - actualDeduction
+  );
+
   const newBalance = Math.max(
     0,
     opening + bonus + allowanceAdded - actualDeduction
@@ -156,6 +161,7 @@ export function calculateWithRules(earnings, openingBalance, settings) {
     bonus,
     allowance,
     extraBonus,
+    balance,
     newBalance,
     status: earned >= target ? 'TARGET ACHIEVED ✅' : 'BELOW TARGET 🚨',
   };

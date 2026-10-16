@@ -78,13 +78,14 @@ function calculateNewRules(earnings, openingBalance, settings) {
   const allowance = Math.min(earningsValue, allowanceCap) * allowanceRate / 100;
   const extraBonus = Math.max(0, earningsValue - dailyTarget) * personalBonusRate / 100;
   const allowanceInBalance = settings.addAllowanceToBalance === true ? allowance : 0;
+  const balance = Math.max(0, previousBalance  - actualDeduction);
   const newBalance = Math.max(0, previousBalance + bonus + allowanceInBalance - actualDeduction);
   return {
     earnings: earningsValue, target: dailyTarget,
     status: earningsValue >= dailyTarget ? 'Target achieved' : 'Below target',
     allowance, bonus, extraBonus, actualDeduction,
     normalDeduction: actualDeduction, extraDeduction: 0, tenPercentDeduction: 0,
-    previousBalance, newBalance, deductionMode,
+    previousBalance, balance, newBalance, deductionMode,
     deductionPercentage: deductionMode === 'percentage' ? deductionPercentage : null,
     shortfall,
   };
@@ -352,29 +353,35 @@ function App() {
           <section className="result-card">
             <h2>{result.streamerName}</h2>
             <p>Date: {result.date}</p>
-            <p>Today's Earnings: {formatNaira(result.earnings)}</p>
-            <p className="status">STATUS: {result.status}</p>
-            <p>Daily Allowance: {formatNaira(result.allowance)}</p>
+             <p>Earned: {formatNaira(result.earnings)}</p>
+             <p className="status">STATUS: {result.status}</p>
+            <p>Allowance: {formatNaira(result.allowance)}</p>
+
             <p>
-              Fixed Deduction Before Allowance:{' '}
-              {formatNaira(result.normalDeduction)}
-            </p>
-            <p>
-              Actual Deduction Applied:{' '}
-              {formatNaira(result.actualDeduction)}
-            </p>
-            <p>Target Bonus: {formatNaira(result.bonus)}</p>
-            <p>
-              Extra Bonus (not added to balance):{' '}
-              {formatNaira(result.extraBonus)}
-            </p>
-            <p>
-              Previous Balance:{' '}
+              Previous Salary:{' '}
               {formatNaira(result.previousBalance)}
             </p>
-            <p className="new-balance">
-              New Balance: {formatNaira(result.newBalance)}
+           
+        
+            <p>
+              Deduction:
+              {formatNaira(result.actualDeduction)}
             </p>
+            <p>
+              Balance: {formatNaira(result.previousBalance)} - {formatNaira(result.actualDeduction)} = {formatNaira(result.balance)}
+            </p>
+
+            <p>Bonus For meeting a Target : {formatNaira(result.bonus)}</p>
+            <p>
+              Extra Bonus (not added to balance):
+              {formatNaira(result.extraBonus)}
+            </p>
+            
+            <p className="new-balance">
+  New Salary: {formatNaira(result.balance)} + {formatNaira(result.bonus)} = {formatNaira(result.newBalance)}
+  <br />
+  {/* <small>Final balance plus the applicable target bonus.</small> */}
+</p>
 
             <button
               className="save-record-button"
@@ -1280,19 +1287,27 @@ function App() {
             <p>{date}</p>
           </header>
 
+      
+
           {todayRecords.length === 0 ? (
             <section className="calculator-card">
               <p>No records saved for this date yet.</p>
             </section>
           ) : (
             <>
-              <section className="summary-list">
+             <section className="summary-list" id="todays-summary">
                 {todayRecords.map((record) => (
                   <article
                     className="summary-card"
                     key={record.id}
                   >
                     <h2>{record.streamerName}</h2>
+<div className="summary-row">
+                      <span>Previous Salary</span>
+                      <strong>
+                        {formatNaira(record.previousBalance)}
+                      </strong>
+                    </div>
 
                     <div className="summary-row">
                       <span>Earnings</span>
@@ -1300,32 +1315,56 @@ function App() {
                         {formatNaira(record.earnings)}
                       </strong>
                     </div>
-
-                    <div className="summary-row">
-                      <span>Bonus</span>
-                      <strong>
-                        {formatNaira(record.bonus)}
-                      </strong>
-                    </div>
-
-                    <div className="summary-row">
+<div className="summary-row">
                       <span>Allowance</span>
                       <strong>
                         {formatNaira(record.allowance)}
                       </strong>
                     </div>
 
-                    <div className="summary-row">
+
+                     <div className="summary-row">
                       <span>Deduction</span>
                       <strong>
                         {formatNaira(record.actualDeduction)}
                       </strong>
                     </div>
 
-                    <div className="summary-row final-row">
-                      <span>Final Balance</span>
+
+                     <div className="summary-row">
+                      <span>Balance</span>
                       <strong>
-                        {formatNaira(record.newBalance)}
+                         {formatNaira(record.previousBalance)} - {formatNaira(record.actualDeduction)} = {formatNaira(record.balance)}
+                      </strong>
+                    </div>
+
+
+                    <div className="summary-row">
+                      <span>Bonus For meeting a Target</span>
+                      <strong>
+                        {formatNaira(record.bonus)}
+                      </strong>
+                    </div>
+
+
+                    <div className="summary-row">
+                      <span><p>
+              Extra Bonus (not added to balance):
+             
+            </p></span>
+                      <strong>
+                         {formatNaira(record.extraBonus)}
+                      </strong>
+                    </div>
+
+                    
+
+                   
+
+                    <div className="summary-row final-row">
+                      <span>New Salary</span>
+                      <strong>
+                        {formatNaira(record.balance)} + {formatNaira(record.bonus)} = {formatNaira(record.newBalance)}
                       </strong>
                     </div>
 
@@ -1337,7 +1376,7 @@ function App() {
               </section>
 
               <section className="totals-card">
-                <h2>Daily Totals</h2>
+                {/* <h2>Daily Totals</h2>
 
                 <div className="summary-row">
                   <span>Total Earnings</span>
@@ -1367,47 +1406,53 @@ function App() {
                 <div className="summary-row">
                   <span>Below Target</span>
                   <strong>{belowTarget}</strong>
-                </div>
+                </div> */}
 
 
                 <div className="report-actions">
-                  <button
-                    className="whatsapp-button"
-                    type="button"
-                    onClick={() => {
-                      const reportDate = new Date(
-                        `${date}T12:00:00`
-                      ).toLocaleDateString('en-NG', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      }).toUpperCase()
 
-                      const streamerReports = todayRecords
-                        .map(
-                          (record) => `${record.streamerName}
-Earnings: ${formatNaira(record.earnings)}
-Bonus: ${formatNaira(record.bonus)}
-Allowance: ${formatNaira(record.allowance)}
-Deduction: ${formatNaira(record.actualDeduction)}
-Balance: ${formatNaira(record.newBalance)}
-Status: ${record.status}`
-                        )
-                        .join('\n\n')
 
-                      const message = `DAILY STREAMER REPORT
+                  
+
+<button
+  className="whatsapp-button"
+  type="button"
+  onClick={() => {
+    const summary = document.getElementById('todays-summary')
+
+
+    if (!summary) {
+      alert("Today's Summary could not be found.")
+      return
+    }
+
+
+    const reportDate = new Date(
+      `${date}T12:00:00`
+    ).toLocaleDateString('en-NG', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).toUpperCase()
+
+
+    const message = `DAILY STREAMER REPORT
 ${reportDate}
 
-${streamerReports}`
 
-                      window.open(
-                        `https://wa.me/?text=${encodeURIComponent(message)}`,
-                        '_blank'
-                      )
-                    }}
-                  >
-                    📱 SHARE TO WHATSAPP
-                  </button>
+${summary.innerText.trim()}`
+
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(message)}`,
+      '_blank'
+    )
+  }}
+>
+  📱 SHARE TO WHATSAPP
+</button>
+
+
 
                   <button
                     className="print-button"
